@@ -1,54 +1,61 @@
-# app.py
 import streamlit as st
-from datetime import datetime, timedelta, date
+from datetime import datetime, timedelta
 from pymongo import MongoClient
 from werkzeug.security import generate_password_hash, check_password_hash
 import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
+from streamlit_calendar import calendar
 
 # -------------------
-# Page Config & Styling
+# Page Config
 # -------------------
 st.set_page_config(page_title="OFFTRACKER", page_icon="📊", layout="centered")
 
-st.markdown(
-    """
+# -------------------
+# Custom Styling
+# -------------------
+st.markdown("""
     <style>
-    body { background-color: #f8f9fa; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
-    .main-title { font-size: 36px; font-weight: 700; color: #2c3e50; text-align: center; margin-bottom: 12px; }
-    .section-title { font-size: 22px; font-weight: 600; color: #34495e; margin-top: 14px; margin-bottom: 8px; }
-    .stButton button { width: 100%; background-color: #2c3e50 !important; color: white !important; border-radius: 8px; padding: 0.6em 0 !important; font-weight: 600; }
-    .stTextInput input, .stPasswordInput input { border-radius: 8px !important; padding: 0.6em !important; border: 1px solid #ced4da !important; }
+    body {
+        background-color: #f8f9fa;
+        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    }
+    .main-title {
+        font-size: 36px;
+        font-weight: 700;
+        color: #2c3e50;
+        text-align: center;
+        margin-bottom: 20px;
+    }
+    .section-title {
+        font-size: 24px;
+        font-weight: 600;
+        color: #34495e;
+        margin-top: 20px;
+        margin-bottom: 10px;
+    }
+    .stButton button {
+        background-color: #2c3e50 !important;
+        color: white !important;
+        border-radius: 8px;
+        padding: 0.6em 1.2em !important;
+        font-weight: 600;
+        margin-right: 5px;
+    }
     </style>
-    """,
-    unsafe_allow_html=True,
-)
+""", unsafe_allow_html=True)
 
 st.markdown("<div class='main-title'>📊 OFFTRACKER</div>", unsafe_allow_html=True)
 
 # -------------------
-# Initialize session state
-# -------------------
-if "user" not in st.session_state:
-    st.session_state.user = None
-if "admin" not in st.session_state:
-    st.session_state.admin = None
-if "temp_dates" not in st.session_state:
-    st.session_state.temp_dates = []
-
-# -------------------
 # DB Connection
 # -------------------
-try:
-    mongo_client = MongoClient(st.secrets["mongo"]["uri"])
-    db = mongo_client["offtracker"]
-    users_col = db["users"]
-    admins_col = db["admins"]
-    schedules_col = db["schedules"]
-except Exception as e:
-    st.error("⚠️ Could not connect to MongoDB. Check st.secrets['mongo']['uri'].")
-    st.stop()
+mongo_client = MongoClient(st.secrets["mongo"]["uri"])
+db = mongo_client["offtracker"]
+users_col = db["users"]
+admins_col = db["admins"]
+schedules_col = db["schedules"]
 
 # -------------------
 # Email Sender
@@ -61,11 +68,11 @@ def send_schedule_email(name, username, course, training_days, off_days):
         msg["Subject"] = f"New Schedule Submitted - {name}"
 
         body = f"""
-Trainer: {name} ({username})
-Course: {course}
-Training Days: {', '.join(training_days)}
-Off Days: {', '.join(off_days)}
-"""
+        Trainer: {name} ({username})
+        Course: {course}
+        Training Days: {', '.join(training_days)}
+        Off Days: {', '.join(off_days)}
+        """
         msg.attach(MIMEText(body, "plain"))
 
         with smtplib.SMTP("smtp.gmail.com", 587) as server:
@@ -79,231 +86,195 @@ Off Days: {', '.join(off_days)}
 # -------------------
 # Off Days Logic
 # -------------------
-def compute_off_days(training_days_iso):
-    training_dates = sorted([datetime.fromisoformat(d).date() for d in training_days_iso])
+def compute_off_days(training_days):
     off_days = []
+    training_days = sorted([datetime.fromisoformat(d) for d in training_days])
     count = 0
-    for i in range(len(training_dates)):
-        if i > 0 and training_dates[i] == training_dates[i - 1] + timedelta(days=1):
+    for i in range(len(training_days)):
+        if i > 0 and training_days[i] == training_days[i-1] + timedelta(days=1):
             count += 1
         else:
             count = 1
         if count == 5:
-            off1 = training_dates[i] + timedelta(days=1)
-            off2 = training_dates[i] + timedelta(days=2)
+            off1 = training_days[i] + timedelta(days=1)
+            off2 = training_days[i] + timedelta(days=2)
             off_days.extend([off1, off2])
             count = 0
-    return [d.isoformat() for d in off_days]
+    return [d.date().isoformat() for d in off_days]
 
 # -------------------
-# Helpers
+# Session State Init
 # -------------------
-def logout():
-    st.session_state.user = None
-    st.session_state.admin = None
-    st.session_state.temp_dates = []
+if "page" not in st.session_state:
+    st.session_state["page"] = "home"
+if "user" not in st.session_state:
+    st.session_state["user"] = None
+if "admin" not in st.session_state:
+    st.session_state["admin"] = None
 
-def add_temp_date(d: date):
-    if d not in st.session_state.temp_dates:
-        st.session_state.temp_dates.append(d)
-        st.session_state.temp_dates.sort()
+# -------------------
+# Navbar
+# -------------------
+def navbar():
+    cols = st.columns(4)
+    if st.session_state["user"]:
+        if cols[0].button("📅 Dashboard"):
+            st.session_state["page"] = "user_dashboard"
+        if cols[1].button("🚪 Logout"):
+            st.session_state["user"] = None
+            st.session_state["page"] = "home"
+    elif st.session_state["admin"]:
+        if cols[0].button("📊 Dashboard"):
+            st.session_state["page"] = "admin_dashboard"
+        if cols[1].button("🚪 Logout"):
+            st.session_state["admin"] = None
+            st.session_state["page"] = "home"
     else:
-        st.warning("Date already added.")
+        if cols[0].button("🏠 Home"):
+            st.session_state["page"] = "home"
+        if cols[1].button("🔑 User Login"):
+            st.session_state["page"] = "login"
+        if cols[2].button("🆕 Register"):
+            st.session_state["page"] = "register"
+        if cols[3].button("👨‍💼 Admin Login"):
+            st.session_state["page"] = "admin_login"
 
-def remove_temp_date(idx: int):
-    if 0 <= idx < len(st.session_state.temp_dates):
-        st.session_state.temp_dates.pop(idx)
-
-# -------------------
-# Navigation Tabs
-# -------------------
-tab_choice = st.radio(
-    "Choose an option",
-    ["🔑 Login as User", "🆕 Register as New User", "👨‍💼 Admin Login"],
-    horizontal=True,
-    label_visibility="collapsed",
-)
+navbar()
 
 # -------------------
-# Register New User
+# Pages
 # -------------------
-if tab_choice == "🆕 Register as New User":
+
+# Home Page
+if st.session_state["page"] == "home":
+    st.info("Welcome to OFFTRACKER. Please use the navigation buttons above.")
+
+# Register Page
+elif st.session_state["page"] == "register":
     st.markdown("<div class='section-title'>🆕 New User Registration</div>", unsafe_allow_html=True)
-    with st.form("register_form", clear_on_submit=False):
+
+    with st.form("register_form"):
         name = st.text_input("Full Name")
         username = st.text_input("Username")
         password = st.text_input("Password", type="password")
         confirm_password = st.text_input("Confirm Password", type="password")
-        submitted = st.form_submit_button("Register")
-    if submitted:
-        if not name or not username or not password or not confirm_password:
-            st.error("⚠️ Please fill all fields.")
-        elif password != confirm_password:
+        submit = st.form_submit_button("Register")
+
+    if submit:
+        if password != confirm_password:
             st.error("❌ Passwords do not match.")
         elif users_col.find_one({"username": username}):
             st.error("⚠️ Username already exists.")
         else:
-            users_col.insert_one(
-                {"name": name, "username": username, "password": generate_password_hash(password)}
-            )
+            users_col.insert_one({
+                "name": name,
+                "username": username,
+                "password": generate_password_hash(password)
+            })
             st.success("✅ Registered successfully! You can now log in.")
 
-# -------------------
-# User Login
-# -------------------
-elif tab_choice == "🔑 Login as User":
+# User Login Page
+elif st.session_state["page"] == "login":
     st.markdown("<div class='section-title'>🔑 User Login</div>", unsafe_allow_html=True)
-    with st.form("login_form"):
+
+    with st.form("user_login_form"):
         username = st.text_input("Username")
         password = st.text_input("Password", type="password")
-        submitted = st.form_submit_button("Login")
-    if submitted:
+        submit = st.form_submit_button("Login")
+
+    if submit:
         user = users_col.find_one({"username": username})
         if user and check_password_hash(user["password"], password):
-            st.session_state.user = {"username": user["username"], "name": user["name"]}
-            st.success(f"✅ Welcome back, {user['name']}!")
+            st.session_state["user"] = user
+            st.session_state["page"] = "user_dashboard"
         else:
             st.error("❌ Invalid username or password")
 
-# -------------------
-# Admin Login
-# -------------------
-elif tab_choice == "👨‍💼 Admin Login":
+# Admin Login Page
+elif st.session_state["page"] == "admin_login":
     st.markdown("<div class='section-title'>👨‍💼 Admin Login</div>", unsafe_allow_html=True)
-    with st.form("admin_form"):
+
+    with st.form("admin_login_form"):
         admin_user = st.text_input("Admin Username")
         admin_pass = st.text_input("Admin Password", type="password")
-        submitted = st.form_submit_button("Login as Admin")
-    if submitted:
+        submit = st.form_submit_button("Login as Admin")
+
+    if submit:
         admin = admins_col.find_one({"username": admin_user})
         if admin and check_password_hash(admin["password"], admin_pass):
-            st.session_state.admin = {"username": admin["username"], "name": admin["name"]}
-            st.success(f"✅ Welcome, Admin {admin['name']}!")
+            st.session_state["admin"] = admin
+            st.session_state["page"] = "admin_dashboard"
         else:
             st.error("❌ Invalid admin credentials")
 
-# -------------------
 # User Dashboard
-# -------------------
-if st.session_state.user:
-    user = st.session_state.user
-    st.markdown("<div class='section-title'>📋 Trainer Dashboard</div>", unsafe_allow_html=True)
-    st.write(f"Signed in as **{user['name']}** ({user['username']})")
-    if st.button("Logout"):
-        logout()
-        st.experimental_rerun()
+elif st.session_state["page"] == "user_dashboard" and st.session_state["user"]:
+    st.success(f"✅ Welcome, {st.session_state['user']['name']}")
+    menu = st.selectbox("Menu", ["📅 Enter New Schedule", "📖 View Existing Schedule", "🛌 View Off Days"])
 
-    menu = st.selectbox("Menu", ["📅 Add New Schedule", "📖 View My Schedules", "🛌 View Off Days"])
-
-    # --- Add New Schedule ---
-    if menu == "📅 Add New Schedule":
-        st.markdown("#### Add Schedule: Pick dates and submit once")
+    # Enter Schedule
+    if menu == "📅 Enter New Schedule":
         course = st.text_input("Course name")
+        st.markdown("#### Select training days from calendar")
+        calendar_options = {"initialView": "dayGridMonth", "selectable": True}
+        cal = calendar(events=[], options=calendar_options, key="calendar_ui")
+        selected_dates = []
+        if cal and "select" in cal:
+            start = datetime.fromisoformat(cal["select"]["start"]).date()
+            end = datetime.fromisoformat(cal["select"]["end"]).date() - timedelta(days=1)
+            while start <= end:
+                selected_dates.append(start.isoformat())
+                start += timedelta(days=1)
+        st.write("📅 Selected training days:", selected_dates)
 
-        col1, col2 = st.columns([2, 1])
-        with col1:
-            date_to_add = st.date_input("Pick a training date", value=date.today())
-        with col2:
-            if st.button("➕ Add Date"):
-                add_temp_date(date_to_add)
-
-        if st.session_state.temp_dates:
-            st.write("**Selected Training Days:**")
-            for idx, d in enumerate(st.session_state.temp_dates):
-                cols = st.columns([6, 1])
-                cols[0].write(f"- {d.isoformat()}")
-                if cols[1].button("❌", key=f"remove_{idx}"):
-                    remove_temp_date(idx)
-                    st.experimental_rerun()
-        else:
-            st.info("No dates added yet.")
-
-        if st.button("Clear All Dates"):
-            st.session_state.temp_dates = []
-
-        if st.button("✅ Submit Schedule"):
-            if not course:
-                st.error("⚠️ Please provide a course name.")
-            elif not st.session_state.temp_dates:
-                st.error("⚠️ Please add at least one training date.")
+        if st.button("Submit Schedule"):
+            if not course or not selected_dates:
+                st.error("⚠️ Please fill course name and select dates.")
             else:
-                iso_dates = [d.isoformat() for d in st.session_state.temp_dates]
-                off_days = compute_off_days(iso_dates)
+                off_days = compute_off_days(selected_dates)
                 schedules_col.insert_one({
-                    "trainer_username": user["username"],
-                    "trainer_name": user["name"],
+                    "trainer_username": st.session_state["user"]["username"],
+                    "trainer_name": st.session_state["user"]["name"],
                     "course": course,
-                    "training_days": iso_dates,
+                    "training_days": selected_dates,
                     "off_days_earned": off_days,
                     "created_at": datetime.utcnow()
                 })
-                ok, msg = send_schedule_email(user["name"], user["username"], course, iso_dates, off_days)
+                ok, msg = send_schedule_email(st.session_state["user"]["name"], st.session_state["user"]["username"], course, selected_dates, off_days)
                 if ok:
                     st.success("✅ Schedule saved & email sent.")
                 else:
                     st.warning(f"⚠️ Schedule saved, email failed: {msg}")
-                st.session_state.temp_dates = []
 
-    # --- View My Schedules ---
-    elif menu == "📖 View My Schedules":
-        schedules = list(schedules_col.find({"trainer_username": user["username"]}).sort("created_at", -1))
+    # View Schedule
+    elif menu == "📖 View Existing Schedule":
+        schedules = list(schedules_col.find({"trainer_username": st.session_state["user"]["username"]}))
         if not schedules:
             st.info("ℹ️ No schedules found.")
         else:
             for sch in schedules:
-                st.write(f"**Course**: {sch.get('course','-')}")
-                st.write(f"📅 Training Days: {', '.join(sch.get('training_days', []))}")
-                st.write(f"🛌 Off Days: {', '.join(sch.get('off_days_earned', [])) or 'None'}")
-                if sch.get("created_at"):
-                    st.caption(f"Submitted on {sch['created_at'].strftime('%Y-%m-%d %H:%M:%S')}")
+                st.write(f"**Course**: {sch['course']}")
+                st.write(f"**Training Days**: {', '.join(sch['training_days'])}")
+                st.write(f"**Off Days**: {', '.join(sch['off_days_earned'])}")
                 st.write("---")
 
-    # --- View Off Days ---
+    # View Off Days
     elif menu == "🛌 View Off Days":
-        schedules = list(schedules_col.find({"trainer_username": user["username"]}))
-        if not schedules:
-            st.info("ℹ️ You don’t have any schedules yet.")
-        else:
-            total_off = sum([len(sch.get("off_days_earned", [])) for sch in schedules])
-            st.success(f"🛌 Total earned off days: {total_off}")
-            st.write("### Breakdown by course")
-            for sch in schedules:
-                st.write(f"- {sch.get('course','-')}: {', '.join(sch.get('off_days_earned', [])) or 'None'}")
+        schedules = list(schedules_col.find({"trainer_username": st.session_state["user"]["username"]}))
+        total_off = sum([len(sch["off_days_earned"]) for sch in schedules])
+        st.info(f"🛌 Total unused off days: {total_off}")
 
-# -------------------
 # Admin Dashboard
-# -------------------
-elif st.session_state.admin:
-    admin = st.session_state.admin
-    st.markdown("<div class='section-title'>🛠️ Admin Dashboard</div>", unsafe_allow_html=True)
-    st.write(f"Signed in as Admin **{admin['name']}** ({admin['username']})")
-    if st.button("Logout"):
-        logout()
-        st.experimental_rerun()
-
-    view_mode = st.selectbox("Admin View", ["📊 All Trainer Schedules", "🔎 Search by Trainer Username"])
-    if view_mode == "📊 All Trainer Schedules":
-        schedules = list(schedules_col.find().sort("created_at", -1))
-        if not schedules:
-            st.info("ℹ️ No schedules submitted yet.")
-        else:
-            for sch in schedules:
-                st.write(f"👨‍🏫 **{sch.get('trainer_name','-')}** ({sch.get('trainer_username','-')})")
-                st.write(f"📘 Course: {sch.get('course','-')}")
-                st.write(f"📅 Training Days: {', '.join(sch.get('training_days', []))}")
-                st.write(f"🛌 Off Days: {', '.join(sch.get('off_days_earned', []))}")
-                if sch.get("created_at"):
-                    st.caption(f"Submitted: {sch['created_at'].strftime('%Y-%m-%d %H:%M:%S')}")
-                st.write("---")
-    elif view_mode == "🔎 Search by Trainer Username":
-        username_q = st.text_input("Trainer username to search")
-        if st.button("Search"):
-            schedules = list(schedules_col.find({"trainer_username": username_q}))
-            if not schedules:
-                st.info("No schedules found for that username.")
-            else:
-                for sch in schedules:
-                    st.write(f"**Course**: {sch.get('course','-')}")
-                    st.write(f"📅 Training Days: {', '.join(sch.get('training_days', []))}")
-                    st.write(f"🛌 Off Days: {', '.join(sch.get('off_days_earned', [])) or 'None'}")
-                    st.write("---")
+elif st.session_state["page"] == "admin_dashboard" and st.session_state["admin"]:
+    st.success(f"✅ Welcome, Admin {st.session_state['admin']['name']}!")
+    st.markdown("### 📊 All Trainer Schedules")
+    schedules = list(schedules_col.find())
+    if not schedules:
+        st.info("ℹ️ No schedules submitted yet.")
+    else:
+        for sch in schedules:
+            st.write(f"👨‍🏫 **{sch['trainer_name']}** ({sch['trainer_username']})")
+            st.write(f"📘 Course: {sch['course']}")
+            st.write(f"📅 Training Days: {', '.join(sch['training_days'])}")
+            st.write(f"🛌 Off Days: {', '.join(sch['off_days_earned'])}")
+            st.write("---")
