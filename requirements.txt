@@ -1,0 +1,7 @@
+streamlit>=1.25
+pymongo>=4.0
+werkzeug>=2.1
+streamlit-calendar>=0.3.0
+streamlit-aggrid>=0.4.0
+pandas>=1.5
+openpyxl>=3.0
