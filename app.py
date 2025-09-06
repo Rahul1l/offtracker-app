@@ -124,6 +124,7 @@ if "admin" not in st.session_state:
 # -------------------
 def navbar():
     cols = st.columns(4)
+
     if st.session_state["user"]:
         if cols[0].button("🏠 Dashboard"):
             st.session_state["page"] = "user_dashboard"
@@ -139,19 +140,40 @@ def navbar():
             st.session_state["page"] = "home"
 
     else:
-        if cols[0].button("🔑 User Login"):
+        if cols[0].button("🏠 Home"):
+            st.session_state["page"] = "home"
+        if cols[1].button("🔑 User Login"):
             st.session_state["page"] = "login"
-        if cols[1].button("🆕 Register"):
+        if cols[2].button("🆕 Register"):
             st.session_state["page"] = "register"
-        if cols[2].button("👨‍💼 Admin Login"):
+        if cols[3].button("👨‍💼 Admin Login"):
             st.session_state["page"] = "admin_login"
 
 navbar()
 
 # -------------------
+# Home Page
+# -------------------
+if st.session_state["page"] == "home":
+    st.markdown("<h1 style='text-align:center;'>📊 Welcome to OFFTRACKER</h1>", unsafe_allow_html=True)
+    st.markdown("<p style='text-align:center;'>Track training schedules, manage off-days, and stay organized 🚀</p>", unsafe_allow_html=True)
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        st.markdown("### 🔑 User Login")
+        st.info("Already have an account? Log in to manage your training schedule and off-days.")
+    with col2:
+        st.markdown("### 🆕 Register")
+        st.success("New here? Create your account and start managing your schedule right away!")
+    with col3:
+        st.markdown("### 👨‍💼 Admin Login")
+        st.warning("Admins can log in to view and manage all trainers’ schedules.")
+    st.write("---")
+    st.markdown("<p style='text-align:center; color:gray;'>Made with ❤️ using Streamlit</p>", unsafe_allow_html=True)
+
+# -------------------
 # User Register
 # -------------------
-if st.session_state["page"] == "register":
+elif st.session_state["page"] == "register":
     st.markdown("<div class='section-title'>🆕 New User Registration</div>", unsafe_allow_html=True)
     with st.form("register_form"):
         name = st.text_input("Full Name")
@@ -214,16 +236,14 @@ elif st.session_state["page"] == "admin_login":
 # -------------------
 elif st.session_state["page"] == "user_dashboard" and st.session_state["user"]:
     st.markdown(f"### 👋 Welcome, {st.session_state['user']['name']}!")
-
     menu = st.selectbox("Menu", ["📅 Enter New Schedule", "📖 View Existing Schedule", "🛌 View Off Days"])
 
-    # --- Enter Schedule ---
+    # Enter Schedule
     if menu == "📅 Enter New Schedule":
         trainer_name = st.session_state["user"]["name"]
         course = st.text_input("Course name")
-        st.markdown("#### Select training days from calendar")
-        calendar_options = {"initialView": "dayGridMonth", "selectable": True}
-        cal = calendar(events=[], options=calendar_options, key="calendar_ui")
+        st.markdown("#### Select training days (click & drag to select multiple dates)")
+        cal = calendar(events=[], options={"initialView": "dayGridMonth", "selectable": True}, key="calendar_ui")
         selected_dates = []
         if cal and "select" in cal:
             start = datetime.fromisoformat(cal["select"]["start"]).date()
@@ -252,7 +272,7 @@ elif st.session_state["page"] == "user_dashboard" and st.session_state["user"]:
                 else:
                     st.warning(f"⚠️ Schedule saved, email failed: {msg}")
 
-    # --- View Schedule ---
+    # View Schedule
     elif menu == "📖 View Existing Schedule":
         schedules = list(schedules_col.find({"trainer_username": st.session_state["user"]["username"]}))
         if not schedules:
@@ -268,19 +288,13 @@ elif st.session_state["page"] == "user_dashboard" and st.session_state["user"]:
                     st.experimental_rerun()
                 st.write("---")
 
-            # Export schedules to Excel
-            df = pd.DataFrame(schedules)
-            df.drop(columns=["_id"], inplace=True)
+            # Export schedules
+            df = pd.DataFrame(schedules).drop(columns=["_id"])
             output = BytesIO()
             df.to_excel(output, index=False, engine="openpyxl")
-            st.download_button(
-                "📥 Download Schedules (Excel)",
-                output.getvalue(),
-                file_name="user_schedules.xlsx",
-                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-            )
+            st.download_button("📥 Download Schedules (Excel)", output.getvalue(), file_name="user_schedules.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
 
-    # --- View Off Days ---
+    # View Off Days
     elif menu == "🛌 View Off Days":
         schedules = list(schedules_col.find({"trainer_username": st.session_state["user"]["username"]}))
         total_off = sum([len(sch["off_days_earned"]) for sch in schedules])
@@ -306,14 +320,7 @@ elif st.session_state["page"] == "admin_dashboard" and st.session_state["admin"]
                 st.experimental_rerun()
             st.write("---")
 
-        # Export all schedules to Excel
-        df = pd.DataFrame(schedules)
-        df.drop(columns=["_id"], inplace=True)
+        df = pd.DataFrame(schedules).drop(columns=["_id"])
         output = BytesIO()
         df.to_excel(output, index=False, engine="openpyxl")
-        st.download_button(
-            "📥 Download All Schedules (Excel)",
-            output.getvalue(),
-            file_name="all_schedules.xlsx",
-            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-        )
+        st.download_button("📥 Download All Schedules (Excel)", output.getvalue(), file_name="all_schedules.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
