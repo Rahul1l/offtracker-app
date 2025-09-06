@@ -116,6 +116,19 @@ tab_choice = st.radio(
     horizontal=True,
     label_visibility="collapsed"
 )
+# -------------------
+# Initialize Session State
+# -------------------
+if "user_logged_in" not in st.session_state:
+    st.session_state.user_logged_in = False
+    st.session_state.username = None
+    st.session_state.name = None
+
+if "admin_logged_in" not in st.session_state:
+    st.session_state.admin_logged_in = False
+    st.session_state.admin_name = None
+
+
 
 # -------------------
 # Register New User
@@ -144,17 +157,34 @@ if tab_choice == "🆕 Register as New User":
 # User Login
 # -------------------
 elif tab_choice == "🔑 Login as User":
-    st.markdown("<div class='section-title'>🔑 User Login</div>", unsafe_allow_html=True)
-    username = st.text_input("Username")
-    password = st.text_input("Password", type="password")
+    if not st.session_state.user_logged_in:
+        st.markdown("<div class='section-title'>🔑 User Login</div>", unsafe_allow_html=True)
+        username = st.text_input("Username")
+        password = st.text_input("Password", type="password")
 
-    if st.button("Login"):
-        user = users_col.find_one({"username": username})
-        if user and check_password_hash(user["password"], password):
-            st.success(f"✅ Welcome back, {user['name']}!")
-            
-            menu = st.selectbox("Menu", ["📅 Enter New Schedule", "📖 View Existing Schedule", "🛌 View Off Days"])
-            
+        if st.button("Login"):
+            user = users_col.find_one({"username": username})
+            if user and check_password_hash(user["password"], password):
+                st.session_state.user_logged_in = True
+                st.session_state.username = username
+                st.session_state.name = user["name"]
+                st.success(f"✅ Welcome back, {user['name']}!")
+            else:
+                st.error("❌ Invalid username or password")
+
+    # Show dashboard if logged in
+    if st.session_state.user_logged_in:
+        st.success(f"👋 Logged in as {st.session_state.name}")
+        menu = st.selectbox("Menu", ["📅 Enter New Schedule", "📖 View Existing Schedule", "🛌 View Off Days"])
+        
+        # (all your user dashboard code here, unchanged)
+
+        if st.button("Logout"):
+            st.session_state.user_logged_in = False
+            st.session_state.username = None
+            st.session_state.name = None
+            st.experimental_rerun()
+
             # --- Enter Schedule ---
             if menu == "📅 Enter New Schedule":
                 trainer_name = user["name"]
@@ -215,24 +245,26 @@ elif tab_choice == "🔑 Login as User":
 # Admin Login
 # -------------------
 elif tab_choice == "👨‍💼 Admin Login":
-    st.markdown("<div class='section-title'>👨‍💼 Admin Login</div>", unsafe_allow_html=True)
-    admin_user = st.text_input("Admin Username")
-    admin_pass = st.text_input("Admin Password", type="password")
+    if not st.session_state.admin_logged_in:
+        st.markdown("<div class='section-title'>👨‍💼 Admin Login</div>", unsafe_allow_html=True)
+        admin_user = st.text_input("Admin Username")
+        admin_pass = st.text_input("Admin Password", type="password")
 
-    if st.button("Login as Admin"):
-        admin = admins_col.find_one({"username": admin_user})
-        if admin and check_password_hash(admin["password"], admin_pass):
-            st.success(f"✅ Welcome, Admin {admin['name']}!")
-            st.markdown("### 📊 All Trainer Schedules")
-            schedules = list(schedules_col.find())
-            if not schedules:
-                st.info("ℹ️ No schedules submitted yet.")
+        if st.button("Login as Admin"):
+            admin = admins_col.find_one({"username": admin_user})
+            if admin and check_password_hash(admin["password"], admin_pass):
+                st.session_state.admin_logged_in = True
+                st.session_state.admin_name = admin["name"]
+                st.success(f"✅ Welcome, Admin {admin['name']}!")
             else:
-                for sch in schedules:
-                    st.write(f"👨‍🏫 **{sch['trainer_name']}** ({sch['trainer_username']})")
-                    st.write(f"📘 Course: {sch['course']}")
-                    st.write(f"📅 Training Days: {', '.join(sch['training_days'])}")
-                    st.write(f"🛌 Off Days: {', '.join(sch['off_days_earned'])}")
-                    st.write("---")
-        else:
-            st.error("❌ Invalid admin credentials")
+                st.error("❌ Invalid admin credentials")
+
+    if st.session_state.admin_logged_in:
+        st.success(f"👨‍💼 Logged in as Admin {st.session_state.admin_name}")
+        st.markdown("### 📊 All Trainer Schedules")
+        # (admin dashboard code here)
+
+        if st.button("Logout"):
+            st.session_state.admin_logged_in = False
+            st.session_state.admin_name = None
+            st.experimental_rerun()
